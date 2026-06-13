@@ -7,7 +7,9 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: { port: 5173 },
     define: {
-      'import.meta.env.VITE_API_URL': JSON.stringify(env.VITE_API_URL || 'http://localhost:5000/api')
+      'import.meta.env.VITE_API_URL': JSON.stringify(
+        process.env.VITE_API_URL || env.VITE_API_URL || 'https://msmview.onrender.com/api'
+      )
     }
   }
 })
