@@ -16,10 +16,14 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
+      console.log('API URL:', import.meta.env.VITE_API_URL)
       await login(email, password)
       navigate('/')
-    } catch {
-      setError('Invalid email or password. Please try again.')
+    } catch (err) {
+      console.error('Login error:', err)
+      console.error('Response:', err.response?.data)
+      console.error('Status:', err.response?.status)
+      setError(err.response?.data?.error || 'Invalid email or password. Please try again.')
     } finally {
       setLoading(false)
     }
