@@ -6,6 +6,14 @@ if (!process.env.TELEGRAM_TOKEN) return;
 
 const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 
+// Suppress Telegram polling conflict errors (happens when multiple instances use the same token)
+let pollingErrorLogged = false;
+bot.on('polling_error', (err) => {
+  if (!pollingErrorLogged) {
+    console.warn('Telegram bot polling conflict (another instance may be running). Suppressing further errors.');
+    pollingErrorLogged = true;
+  }
+});
 // Store doctor sessions: chatId → { doctorId, step, data }
 const sessions = {};
 

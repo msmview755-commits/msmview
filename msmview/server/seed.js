@@ -1,6 +1,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 const User     = require('./models/User');
+const dns = require('dns');
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 const users = [
   { name: 'Super Admin',       email: 'admin@msmview.com',     password: 'admin123',   role: 'super_admin',       group: '' },
