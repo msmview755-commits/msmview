@@ -47,6 +47,7 @@ export default function Inventory() {
   const [showAdd,  setShowAdd]  = useState(false)
   const [search,   setSearch]   = useState('')
   const [page,     setPage]     = useState(1)
+  const [updatingReqId, setUpdatingReqId] = useState(null)
   const PER_PAGE = 4
 
   const [reqForm, setReqForm] = useState({ requesterName: user?.name || '', item: '', quantity: '', category: cat })
@@ -103,11 +104,16 @@ export default function Inventory() {
   }
 
   const handleStatus = async (id, status) => {
+    setUpdatingReqId(id)
     try {
       await axios.patch(`${API}/inventory/requests/${id}`, { status })
       // Re-fetch both items and requests since completing a request updates stock
       fetchData()
-    } catch { alert('Error updating status') }
+    } catch { 
+      alert('Error updating status') 
+    } finally {
+      setUpdatingReqId(null)
+    }
   }
 
   return (
@@ -226,8 +232,15 @@ export default function Inventory() {
               <div className="text-xs text-muted mt-1">By {req.requesterName} · Qty: {req.quantity}</div>
               {isManager && req.status === 'Pending' && (
                 <div className="flex-center gap-1 mt-1">
-                  <button className="btn btn-primary" style={{ padding: '0.25rem 0.7rem', fontSize: '0.75rem' }} onClick={() => handleStatus(req._id, 'Complete')}>
-                    <span className="flex-center gap-1"><CheckIcon /> Complete</span>
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ padding: '0.25rem 0.7rem', fontSize: '0.75rem' }} 
+                    onClick={() => handleStatus(req._id, 'Complete')}
+                    disabled={updatingReqId === req._id}
+                  >
+                    <span className="flex-center gap-1">
+                      <CheckIcon /> {updatingReqId === req._id ? 'Completing...' : 'Complete'}
+                    </span>
                   </button>
                 </div>
               )}

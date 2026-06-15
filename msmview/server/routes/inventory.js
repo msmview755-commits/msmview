@@ -39,6 +39,18 @@ router.post('/items', protect, async (req, res) => {
       itemCategory = group || 'Santos';
     }
 
+    // Check if an item with the same name already exists in this category
+    const existing = await InventoryItem.findOne({
+      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      category: itemCategory
+    });
+
+    if (existing) {
+      existing.quantity += Number(quantity) || 0;
+      await existing.save();
+      return res.status(200).json(existing);
+    }
+
     // Auto-generate itemId
     const count = await InventoryItem.countDocuments({ category: itemCategory });
     const prefix = itemCategory === 'AV/IT' ? 'AVIT' : itemCategory.toUpperCase();
@@ -107,6 +119,15 @@ router.post('/requests', protect, async (req, res) => {
 router.patch('/requests/:id', protect, requireRole('inventory_manager', 'super_admin'), async (req, res) => {
   try {
     const { status } = req.body;
+
+    const originalRequest = await InventoryRequest.findById(req.params.id);
+    if (!originalRequest) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    // Only update stock if transitioning to Complete status
+    const isCompleting = status === 'Complete' && originalRequest.status !== 'Complete';
+
     const request = await InventoryRequest.findByIdAndUpdate(
       req.params.id,
       { status, handledBy: req.user.id },
@@ -114,7 +135,7 @@ router.patch('/requests/:id', protect, requireRole('inventory_manager', 'super_a
     );
 
     // When a request is marked Complete, add the quantity to inventory stock
-    if (status === 'Complete' && request) {
+    if (isCompleting && request) {
       const existing = await InventoryItem.findOne({
         name: { $regex: new RegExp(`^${request.item}$`, 'i') },
         category: request.category

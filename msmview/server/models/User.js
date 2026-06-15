@@ -14,6 +14,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['Santos', 'AV/IT', 'Sevaks', ''],
     default: ''
+  },
+  telegramChatId: {
+    type: String,
+    default: null
   }
 }, { timestamps: true });
 
