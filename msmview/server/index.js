@@ -86,6 +86,7 @@ app.get('/', (req, res) => res.json({ status: 'MSM View API running' }));
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
+    // Trigger Render auto-redeploy. Connected to MongoDB.
     console.log('MongoDB connected');
 
     // Set up Telegram bot webhook (replaces polling)
