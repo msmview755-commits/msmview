@@ -19,7 +19,7 @@ const FEEDS = {
   ],
   community: [
     // Add your community website RSS feed URL here
-    'https://feeds.bbci.co.uk/news/health/rss.xml'
+    'https://www.baps.org/RSSfeed.aspx'
   ]
 };
 
