@@ -5,7 +5,7 @@ const inventoryItemSchema = new mongoose.Schema({
   name:      { type: String, required: true },
   quantity:  { type: Number, required: true, default: 0 },
   category:  { type: String, enum: ['Santos', 'AV/IT', 'Sevaks'], required: true },
-  lowStockThreshold: { type: Number, default: 3 }
+  addedBy:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('InventoryItem', inventoryItemSchema);

@@ -71,7 +71,7 @@ export default function Events() {
 
       {events.length === 0 ? (
         <div className="card" style={{ textAlign:'center', padding:'4rem' }}>
-          <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>📅</div>
+          <div style={{ marginBottom:'1rem' }}><svg width="48" height="48" fill="none" stroke="var(--text-light)" strokeWidth="1.5" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
           <div className="fw-600 mb-1">No events yet</div>
           {isAdmin && <p className="text-sm text-muted">Click "Add Event" to create the first one.</p>}
         </div>
@@ -104,9 +104,9 @@ export default function Events() {
                       </div>
                       {ev.description && <p style={{ fontSize:'0.82rem', color:'var(--text-light)', margin:'0.3rem 0' }}>{ev.description}</p>}
                       <div className="event-meta">
-                        <span>🕐 {d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} – {end.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
-                        {ev.location && <span>📍 {ev.location}</span>}
-                        <span>👤 {ev.postedBy?.name}</span>
+                        <span><svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{verticalAlign:'middle',marginRight:2}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> {d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} – {end.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+                        {ev.location && <span><svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{verticalAlign:'middle',marginRight:2}}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> {ev.location}</span>}
+                        <span><svg width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{verticalAlign:'middle',marginRight:2}}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> {ev.postedBy?.name}</span>
                       </div>
                     </div>
                   </div>

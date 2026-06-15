@@ -55,7 +55,7 @@ export default function News() {
                 {item.image ? (
                   <img className="news-card-img" src={item.image} alt={item.title} onError={e => { e.target.style.display='none' }} />
                 ) : (
-                  <div className="news-card-img" style={{ background: 'var(--teal)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:'2rem' }}>📰</div>
+                  <div className="news-card-img" style={{ background: 'var(--teal)', display:'flex', alignItems:'center', justifyContent:'center' }}><svg width="32" height="32" fill="none" stroke="white" strokeWidth="1.5" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><line x1="10" y1="6" x2="18" y2="6"/><line x1="10" y1="10" x2="18" y2="10"/><line x1="10" y1="14" x2="14" y2="14"/></svg></div>
                 )}
                 <div className="news-card-body">
                   <div className="news-card-title">{item.title}</div>

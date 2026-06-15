@@ -4,56 +4,43 @@ const User         = require('../models/User');
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const RENDER_URL     = process.env.RENDER_EXTERNAL_URL || 'https://msmview.onrender.com';
+const IS_PRODUCTION  = process.env.NODE_ENV === 'production' || process.env.RENDER_EXTERNAL_URL;
 
-// Create bot without polling — we'll use webhooks in production
 let bot = null;
 
 if (TELEGRAM_TOKEN) {
-  bot = new TelegramBot(TELEGRAM_TOKEN, { polling: false });
+  // Use polling in local dev, webhook in production
+  bot = new TelegramBot(TELEGRAM_TOKEN, { polling: !IS_PRODUCTION });
+  if (!IS_PRODUCTION) {
+    console.log('Telegram bot running (polling mode for local dev)');
+  }
 }
 
-// Store doctor sessions: chatId → { doctorId, step, data }
+// Store doctor sessions: chatId -> { doctorId, step, data }
 const sessions = {};
 
 /**
- * Set up the Telegram webhook endpoint on the Express app.
- * Called from index.js after MongoDB connects and before app.listen().
+ * Register all bot commands and message handlers.
+ * Called once — works for both polling and webhook mode.
  */
-function setupWebhook(app) {
-  if (!bot || !TELEGRAM_TOKEN) {
-    console.warn('TELEGRAM_TOKEN not set — Telegram bot disabled');
-    return;
-  }
-
-  const webhookPath = `/bot/telegram`;
-  const webhookUrl  = `${RENDER_URL}${webhookPath}`;
-
-  // Route that Telegram will POST updates to
-  app.post(webhookPath, (req, res) => {
-    bot.processUpdate(req.body);
-    res.sendStatus(200);
-  });
-
-  // Tell Telegram to send updates to our webhook URL
-  bot.setWebHook(webhookUrl)
-    .then(() => console.log(`Telegram webhook set: ${webhookUrl}`))
-    .catch(err => console.error('Failed to set Telegram webhook:', err.message));
-
-  // Register bot commands
-  registerCommands();
-
-  console.log('Telegram bot running (webhook mode)');
-}
-
 function registerCommands() {
-  bot.onText(/\/start/, async (msg) => {
+  if (!bot) return;
+
+  bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     bot.sendMessage(chatId,
-      `Welcome to MSM View Health Bot 🏥\n\nCommands:\n/upload - Upload a new health report\n/latest - View latest report\n/help - Help`
+      'Welcome to MSM View Health Bot\n\nCommands:\n/upload - Upload a new health report\n/latest - View latest report\n/help - Help'
     );
   });
 
-  bot.onText(/\/upload/, async (msg) => {
+  bot.onText(/\/help/, (msg) => {
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId,
+      'MSM View Health Bot Commands:\n\n/start - Welcome message\n/upload - Upload a new health report\n/latest - View latest report\n/help - Show this help'
+    );
+  });
+
+  bot.onText(/\/upload/, (msg) => {
     const chatId = msg.chat.id;
     sessions[chatId] = { step: 'await_email', data: {} };
     bot.sendMessage(chatId, 'Please enter your doctor email to verify:');
@@ -65,29 +52,34 @@ function registerCommands() {
       const report = await HealthReport.findOne().sort({ createdAt: -1 }).populate('postedBy', 'name');
       if (!report) return bot.sendMessage(chatId, 'No reports found.');
       bot.sendMessage(chatId,
-        `📋 Latest Report\nPatient: ${report.patientName}\nBP: ${report.measurements.bloodPressure}\nGlucose: ${report.measurements.glucose}\nHeart Rate: ${report.measurements.heartRate}\nStress: ${report.measurements.stressLevel}\nBy: ${report.postedBy?.name}\nDate: ${new Date(report.createdAt).toLocaleDateString()}`
+        `Latest Report\nPatient: ${report.patientName}\nBP: ${report.measurements.bloodPressure}\nGlucose: ${report.measurements.glucose}\nHeart Rate: ${report.measurements.heartRate}\nStress: ${report.measurements.stressLevel}\nBy: ${report.postedBy?.name}\nDate: ${new Date(report.createdAt).toLocaleDateString()}`
       );
     } catch (err) {
       bot.sendMessage(chatId, 'Error fetching report.');
     }
   });
 
+  // Generic message handler for conversation flow
+  // This MUST be registered after onText handlers
   bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const text   = msg.text;
-    if (!sessions[chatId] || text.startsWith('/')) return;
+    // Skip commands — they are handled by onText above
+    if (!text || text.startsWith('/')) return;
+    // Skip if no active session
+    if (!sessions[chatId]) return;
 
     const session = sessions[chatId];
 
     if (session.step === 'await_email') {
       const doctor = await User.findOne({ email: text.toLowerCase(), role: 'doctor' });
       if (!doctor) {
-        bot.sendMessage(chatId, '❌ No doctor found with that email. Try again or /upload to restart.');
+        bot.sendMessage(chatId, 'No doctor found with that email. Try again or /upload to restart.');
         return;
       }
       session.data.doctorId = doctor._id;
       session.step = 'await_patient';
-      bot.sendMessage(chatId, `✅ Verified as ${doctor.name}\n\nEnter patient name:`);
+      bot.sendMessage(chatId, `Verified as ${doctor.name}\n\nEnter patient name:`);
       return;
     }
 
@@ -140,14 +132,52 @@ function registerCommands() {
           notes:    session.data.notes,
           postedBy: session.data.doctorId
         });
-        bot.sendMessage(chatId, `✅ Health report saved for ${session.data.patientName}! It is now live on the dashboard.`);
+        bot.sendMessage(chatId, `Health report saved for ${session.data.patientName}! It is now live on the dashboard.`);
       } catch (err) {
-        bot.sendMessage(chatId, '❌ Error saving report. Try again.');
+        bot.sendMessage(chatId, 'Error saving report. Try again.');
       }
       delete sessions[chatId];
       return;
     }
   });
+}
+
+// Register commands immediately (works for both polling and webhook)
+if (bot) {
+  registerCommands();
+}
+
+/**
+ * Set up the Telegram webhook endpoint on the Express app.
+ * Called from index.js after MongoDB connects.
+ * Only sets webhook in production mode.
+ */
+function setupWebhook(app) {
+  if (!bot || !TELEGRAM_TOKEN) {
+    console.warn('TELEGRAM_TOKEN not set — Telegram bot disabled');
+    return;
+  }
+
+  if (!IS_PRODUCTION) {
+    console.log('Skipping webhook setup — using polling mode for local dev');
+    return;
+  }
+
+  const webhookPath = `/bot/telegram`;
+  const webhookUrl  = `${RENDER_URL}${webhookPath}`;
+
+  // Route that Telegram will POST updates to
+  app.post(webhookPath, (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
+  });
+
+  // Tell Telegram to send updates to our webhook URL
+  bot.setWebHook(webhookUrl)
+    .then(() => console.log(`Telegram webhook set: ${webhookUrl}`))
+    .catch(err => console.error('Failed to set Telegram webhook:', err.message));
+
+  console.log('Telegram bot running (webhook mode)');
 }
 
 module.exports = { bot, setupWebhook };

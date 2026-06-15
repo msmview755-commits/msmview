@@ -16,7 +16,7 @@ L.Icon.Default.mergeOptions({
 const API = import.meta.env.VITE_API_URL
 const CENTER = [21.1702, 72.8311] // Surat, Gujarat
 
-const TYPE_COLORS = { traffic: '🔴', construction: '🟡', accident: '🟠', closure: '⛔', other: '🔵' }
+const TYPE_COLORS = { traffic: '#e53e3e', construction: '#d69e2e', accident: '#dd6b20', closure: '#c53030', other: '#3182ce' }
 
 function PinDropper({ onDrop }) {
   useMapEvents({ click: e => onDrop(e.latlng) })
@@ -64,7 +64,7 @@ export default function Roads() {
         <div className="flex-center gap-1">
           {isAdmin && (
             <button className="btn btn-primary" onClick={() => setDropping(!dropping)}>
-              {dropping ? '❌ Cancel Pin' : '📍 Add Incident'}
+              {dropping ? 'Cancel Pin' : 'Add Incident'}
             </button>
           )}
         </div>
@@ -100,10 +100,10 @@ export default function Roads() {
           {incidents.map(inc => (
             <Marker key={inc._id} position={[inc.location.lat, inc.location.lng]}>
               <Popup>
-                <strong>{TYPE_COLORS[inc.type]} {inc.title}</strong><br />
+                <strong><span style={{display:'inline-block',width:8,height:8,borderRadius:'50%',background:TYPE_COLORS[inc.type],marginRight:6}}></span>{inc.title}</strong><br />
                 {inc.description}<br />
                 <small style={{ color:'#718096' }}>
-                  {inc.location.address && `📍 ${inc.location.address}`}<br />
+                  {inc.location.address && inc.location.address}<br />
                   Added: {new Date(inc.createdAt).toLocaleDateString()}
                 </small>
               </Popup>
@@ -119,7 +119,7 @@ export default function Roads() {
           {incidents.map(inc => (
             <div key={inc._id} className="flex-between" style={{ padding:'0.6rem 0', borderBottom:'1px solid var(--border)', fontSize:'0.85rem' }}>
               <div>
-                <span>{TYPE_COLORS[inc.type]} </span>
+                <span style={{display:'inline-block',width:8,height:8,borderRadius:'50%',background:TYPE_COLORS[inc.type],marginRight:6}}></span>
                 <span className="fw-600">{inc.title}</span>
                 {inc.location.address && <span className="text-muted"> · {inc.location.address}</span>}
               </div>

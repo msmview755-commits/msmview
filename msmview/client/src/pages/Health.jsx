@@ -54,10 +54,10 @@ export default function Health() {
       {/* Metrics row */}
       <div className="grid-4 mb-3">
         {[
-          { label: 'Blood Pressure', value: latest?.measurements?.bloodPressure || '--', unit: 'mmHg', icon: '💓' },
-          { label: 'Glucose',        value: latest?.measurements?.glucose        || '--', unit: 'mg/dL', icon: '🩸' },
-          { label: 'Heart Rate',     value: latest?.measurements?.heartRate      || '--', unit: 'Bpm',  icon: '❤️' },
-          { label: 'Stress Levels',  value: latest?.measurements?.stressLevel    || '--', unit: '/ 10', icon: '🧠' },
+          { label: 'Blood Pressure', value: latest?.measurements?.bloodPressure || '--', unit: 'mmHg', icon: <svg width="18" height="18" fill="none" stroke="#e53e3e" strokeWidth="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> },
+          { label: 'Glucose',        value: latest?.measurements?.glucose        || '--', unit: 'mg/dL', icon: <svg width="18" height="18" fill="none" stroke="#e53e3e" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg> },
+          { label: 'Heart Rate',     value: latest?.measurements?.heartRate      || '--', unit: 'Bpm',  icon: <svg width="18" height="18" fill="none" stroke="#e53e3e" strokeWidth="2" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> },
+          { label: 'Stress Levels',  value: latest?.measurements?.stressLevel    || '--', unit: '/ 10', icon: <svg width="18" height="18" fill="none" stroke="#805ad5" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg> },
         ].map(m => (
           <div className="metric-card" key={m.label}>
             <div className="metric-label">{m.label} <span>{m.icon}</span></div>
@@ -110,7 +110,7 @@ export default function Health() {
       {/* Medications */}
       {latest?.medications?.length > 0 && (
         <div className="card mb-3">
-          <div className="fw-600 mb-2">📋 Current Medications</div>
+          <div className="fw-600 mb-2"><svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:'4px',verticalAlign:'middle'}}><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Current Medications</div>
           {latest.medications.map((m, i) => (
             <div key={i} className="flex-between" style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--border)', fontSize: '0.85rem' }}>
               <span>{m.name} ({m.dosage})</span>
@@ -123,12 +123,12 @@ export default function Health() {
       {/* Upload bar */}
       <div className="card flex-between" style={{ padding: '1rem 1.5rem' }}>
         <div className="flex-center gap-1">
-          <span>📄</span>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           <span className="text-sm text-muted">Last Report on {latest ? new Date(latest.createdAt).toLocaleDateString('en-GB') : 'N/A'}</span>
         </div>
         {isDoctor && (
           <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            ⬆️ Upload New Report
+            <svg width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" style={{marginRight:4}}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload New Report
           </button>
         )}
       </div>
@@ -199,7 +199,7 @@ export default function Health() {
 
               <div className="flex-between mt-2">
                 <button type="button" className="btn btn-outline" onClick={() => setShowModal(false)}>Discard Entry</button>
-                <button type="submit" className="btn btn-primary">Submit Health Data ➤</button>
+                <button type="submit" className="btn btn-primary">Submit Health Data</button>
               </div>
             </form>
           </div>
