@@ -97,10 +97,13 @@ function registerCommands() {
         return bot.sendMessage(chatId, 'No user account found with that email. Please check the email address or register on the dashboard.');
       }
 
-      user.telegramChatId = chatId;
-      await user.save();
+      sessions[chatId] = {
+        type: 'login',
+        step: 'await_password',
+        data: { userId: user._id }
+      };
 
-      bot.sendMessage(chatId, `Successfully logged in as:\n*Name:* ${user.name}\n*Role:* ${user.role}\n*Group:* ${user.group || 'None'}`, { parse_mode: 'Markdown' });
+      bot.sendMessage(chatId, `Enter your password to verify login for *${user.email}*:`, { parse_mode: 'Markdown' });
     } catch (err) {
       bot.sendMessage(chatId, 'An error occurred during login. Please try again.');
     }
@@ -239,6 +242,35 @@ function registerCommands() {
     }
   });
 
+  bot.onText(/\/minus/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete sessions[chatId];
+
+    const user = await getLoggedInUser(chatId);
+    if (!user) {
+      return bot.sendMessage(chatId, 'Please link your account first using `/login <email>` to decrease stock.', { parse_mode: 'Markdown' });
+    }
+
+    if (user.role === 'inventory_manager' || user.role === 'super_admin') {
+      const opts = {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Santos', callback_data: 'minus_cat:Santos' },
+              { text: 'AV/IT', callback_data: 'minus_cat:AV/IT' },
+              { text: 'Sevaks', callback_data: 'minus_cat:Sevaks' }
+            ]
+          ]
+        }
+      };
+      bot.sendMessage(chatId, 'Select category to decrease stock from:', opts);
+    } else {
+      const category = user.group || 'Santos';
+      sessions[chatId] = { type: 'minus', step: 'await_name', data: { category } };
+      bot.sendMessage(chatId, `Decreasing stock from *${category}* category.\n\nEnter item name (e.g. HDMI Cable):`, { parse_mode: 'Markdown' });
+    }
+  });
+
   bot.onText(/\/requests/, async (msg) => {
     const chatId = msg.chat.id;
     delete sessions[chatId];
@@ -358,6 +390,15 @@ function registerCommands() {
         return;
       }
 
+      // 3b. Minus Category Callbacks
+      if (data.startsWith('minus_cat:')) {
+        const category = data.split(':')[1];
+        sessions[chatId] = { type: 'minus', step: 'await_name', data: { category } };
+        bot.sendMessage(chatId, `Decreasing stock from *${category}* category.\n\nEnter item name (e.g. HDMI Cable):`, { parse_mode: 'Markdown' });
+        bot.answerCallbackQuery(query.id);
+        return;
+      }
+
       // 4. Complete Supply Request Callbacks (Managers only)
       if (data.startsWith('complete_req:')) {
         const reqId = data.split(':')[1];
@@ -441,6 +482,35 @@ function registerCommands() {
     if (!session) return;
 
     const user = await getLoggedInUser(chatId);
+
+    // 0. Login verification flow
+    if (session.type === 'login') {
+      if (session.step === 'await_password') {
+        try {
+          const bcrypt = require('bcryptjs');
+          const loginUser = await User.findById(session.data.userId);
+          if (!loginUser) {
+            delete sessions[chatId];
+            return bot.sendMessage(chatId, 'User not found. Please try `/login <email>` again.');
+          }
+
+          const isMatch = await bcrypt.compare(text, loginUser.password);
+          if (!isMatch) {
+            delete sessions[chatId];
+            return bot.sendMessage(chatId, 'Incorrect password. Login failed. Please try `/login <email>` again.');
+          }
+
+          loginUser.telegramChatId = chatId;
+          await loginUser.save();
+
+          bot.sendMessage(chatId, `Successfully logged in as:\n*Name:* ${loginUser.name}\n*Role:* ${loginUser.role}\n*Group:* ${loginUser.group || 'None'}`, { parse_mode: 'Markdown' });
+        } catch (err) {
+          bot.sendMessage(chatId, 'An error occurred during password validation. Please try `/login <email>` again.');
+        }
+        delete sessions[chatId];
+        return;
+      }
+    }
 
     // 1. Health report flow (compatible with legacy doctors)
     if (session.type === 'health' || (!session.type && session.step)) {
@@ -565,6 +635,69 @@ function registerCommands() {
           }
         } catch (err) {
           bot.sendMessage(chatId, 'Error saving stock details.');
+        }
+        delete sessions[chatId];
+        return;
+      }
+    }
+
+    // 2b. Minus Stock flow
+    if (session.type === 'minus') {
+      if (!user) {
+        delete sessions[chatId];
+        return bot.sendMessage(chatId, 'Session expired or user not logged in.');
+      }
+
+      if (session.step === 'await_name') {
+        const itemName = text.trim();
+        try {
+          const itemCategory = session.data.category;
+          const existing = await InventoryItem.findOne({
+            name: { $regex: new RegExp(`^${itemName}$`, 'i') },
+            category: itemCategory
+          });
+
+          if (!existing) {
+            delete sessions[chatId];
+            return bot.sendMessage(chatId, `Item *${itemName}* not found in *${itemCategory}* category.`, { parse_mode: 'Markdown' });
+          }
+
+          session.data.itemId = existing._id;
+          session.data.name = existing.name;
+          session.data.currentQty = existing.quantity;
+          session.step = 'await_qty';
+
+          bot.sendMessage(chatId, `Item: *${existing.name}*\nCurrent Stock: *${existing.quantity}*\n\nEnter quantity to remove (positive integer):`, { parse_mode: 'Markdown' });
+        } catch (err) {
+          bot.sendMessage(chatId, 'Error looking up item.');
+          delete sessions[chatId];
+        }
+        return;
+      }
+
+      if (session.step === 'await_qty') {
+        const qty = parseInt(text.trim());
+        if (isNaN(qty) || qty <= 0) {
+          return bot.sendMessage(chatId, 'Please enter a valid positive number for the quantity:');
+        }
+
+        if (qty > session.data.currentQty) {
+          return bot.sendMessage(chatId, `Insufficient stock! Only *${session.data.currentQty}* units available. Enter a smaller quantity:`, { parse_mode: 'Markdown' });
+        }
+
+        try {
+          const item = await InventoryItem.findById(session.data.itemId);
+          if (!item) {
+            delete sessions[chatId];
+            return bot.sendMessage(chatId, 'Item not found.');
+          }
+
+          item.quantity -= qty;
+          await item.save();
+
+          bot.sendMessage(chatId, `Stock updated successfully! *${item.name}* (Category: ${item.category}) now has quantity *${item.quantity}*.`, { parse_mode: 'Markdown' });
+        } catch (err) {
+          bot.sendMessage(chatId, 'Error updating stock details.');
         }
         delete sessions[chatId];
         return;
