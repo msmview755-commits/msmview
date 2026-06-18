@@ -30,6 +30,9 @@ const ClockIcon = () => (
 const XIcon = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 )
+const MinusIcon = () => (
+  <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+)
 
 export default function Inventory() {
   const { user } = useAuth()
@@ -116,6 +119,16 @@ export default function Inventory() {
     }
   }
 
+  const handleDecrement = async (id, amount) => {
+    try {
+      await axios.patch(`${API}/inventory/items/${id}/decrement`, { amount })
+      fetchData()
+    } catch (err) {
+      const errMsg = err.response?.data?.error || 'Error updating stock'
+      alert(errMsg)
+    }
+  }
+
   return (
     <div>
       <div className="flex-between mb-1">
@@ -191,7 +204,30 @@ export default function Inventory() {
                           {item.name}
                         </div>
                       </td>
-                      <td style={{ fontWeight: 500 }}>{item.quantity}</td>
+                      <td style={{ fontWeight: 500 }}>
+                        <div className="flex-center" style={{ gap: '0.4rem', justifyContent: 'flex-start' }}>
+                          <span>{item.quantity}</span>
+                          {item.quantity > 0 && (
+                            <button
+                              className="btn btn-outline"
+                              style={{ 
+                                padding: '0.2rem 0.35rem', 
+                                height: '22px', 
+                                width: '22px',
+                                minWidth: 'auto',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px',
+                              }}
+                              onClick={() => handleDecrement(item._id, 1)}
+                              title="Decrease stock (Outgoing)"
+                            >
+                              <MinusIcon />
+                            </button>
+                          )}
+                        </div>
+                      </td>
                       <td>
                         <span className={`badge ${item.quantity > 0 ? 'badge-complete' : 'badge-pending'}`}>
                           {item.quantity > 0 ? 'In Stock' : 'Out of Stock'}

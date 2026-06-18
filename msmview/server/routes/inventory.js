@@ -69,6 +69,40 @@ router.post('/items', protect, async (req, res) => {
   }
 });
 
+// PATCH /api/inventory/items/:id/decrement — any logged-in user can decrement stock
+// Members can only decrement items of their own category; managers/admins can decrement any item
+router.patch('/items/:id/decrement', protect, async (req, res) => {
+  try {
+    const { role, group } = req.user;
+    const { amount } = req.body;
+    const decrementAmount = Number(amount) || 1;
+
+    const item = await InventoryItem.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    // Authorization check
+    if (role !== 'inventory_manager' && role !== 'super_admin') {
+      const userGroup = group || 'Santos';
+      if (item.category !== userGroup) {
+        return res.status(403).json({ error: 'Unauthorized to modify items outside your group' });
+      }
+    }
+
+    if (item.quantity < decrementAmount) {
+      return res.status(400).json({ error: 'Insufficient stock' });
+    }
+
+    item.quantity -= decrementAmount;
+    await item.save();
+
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/inventory/requests
 // Members see only their group's requests; managers/admins see any/all
 router.get('/requests', protect, async (req, res) => {
