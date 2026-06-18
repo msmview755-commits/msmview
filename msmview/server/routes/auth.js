@@ -63,4 +63,18 @@ router.get('/users', protect, requireRole('super_admin'), async (req, res) => {
   }
 });
 
+// DELETE /api/auth/users/:id  (super_admin only)
+router.delete('/users/:id', protect, requireRole('super_admin'), async (req, res) => {
+  try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ message: 'User deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

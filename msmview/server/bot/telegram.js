@@ -59,10 +59,17 @@ function registerCommands() {
       '/latest - View latest health report\n' +
       '/logout - Log out from this device';
 
+    if (user && user.role === 'super_admin') {
+      welcomeMsg += '\n\nAdmin Commands:\n' +
+        '/users - List all users\n' +
+        '/adduser - Create a new user\n' +
+        '/removeuser - Delete a user';
+    }
+
     bot.sendMessage(chatId, welcomeMsg, { parse_mode: 'Markdown' });
   });
 
-  bot.onText(/\/help/, (msg) => {
+  bot.onText(/\/help/, async (msg) => {
     const chatId = msg.chat.id;
     delete sessions[chatId];
 
@@ -78,6 +85,14 @@ function registerCommands() {
       '/latest - View latest doctor health report\n' +
       '/logout - Unlink your Telegram account\n' +
       '/help - Show this help menu';
+
+    const user = await getLoggedInUser(chatId);
+    if (user && user.role === 'super_admin') {
+      helpMsg += '\n\nAdmin Commands:\n' +
+        '/users - List all registered users\n' +
+        '/adduser - Create a new user account\n' +
+        '/removeuser - Delete a user account';
+    }
 
     bot.sendMessage(chatId, helpMsg);
   });
@@ -347,6 +362,77 @@ function registerCommands() {
     }
   });
 
+  // ---- Admin: List Users ----
+  bot.onText(/\/users/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete sessions[chatId];
+
+    const user = await getLoggedInUser(chatId);
+    if (!user || user.role !== 'super_admin') {
+      return bot.sendMessage(chatId, '❌ Only super admins can use this command.');
+    }
+
+    try {
+      const users = await User.find().select('-password').sort({ createdAt: -1 });
+      if (users.length === 0) {
+        return bot.sendMessage(chatId, 'No users found.');
+      }
+      let resp = '👥 *Registered Users:*\n\n';
+      users.forEach((u, i) => {
+        resp += `*${i + 1}. ${u.name}*\n📧 ${u.email}\n🔑 ${u.role}${u.group ? ` | 👥 ${u.group}` : ''}\n\n`;
+      });
+      bot.sendMessage(chatId, resp, { parse_mode: 'Markdown' });
+    } catch (err) {
+      bot.sendMessage(chatId, '❌ Error fetching users.');
+    }
+  });
+
+  // ---- Admin: Add User (wizard) ----
+  bot.onText(/\/adduser/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete sessions[chatId];
+
+    const user = await getLoggedInUser(chatId);
+    if (!user || user.role !== 'super_admin') {
+      return bot.sendMessage(chatId, '❌ Only super admins can use this command.');
+    }
+
+    sessions[chatId] = { type: 'adduser', step: 'await_name', data: {} };
+    bot.sendMessage(chatId, '👤 *Create New User*\n\nEnter the user\'s full name:', { parse_mode: 'Markdown' });
+  });
+
+  // ---- Admin: Remove User ----
+  bot.onText(/\/removeuser/, async (msg) => {
+    const chatId = msg.chat.id;
+    delete sessions[chatId];
+
+    const user = await getLoggedInUser(chatId);
+    if (!user || user.role !== 'super_admin') {
+      return bot.sendMessage(chatId, '❌ Only super admins can use this command.');
+    }
+
+    try {
+      const users = await User.find({ _id: { $ne: user._id } }).select('-password').sort({ name: 1 });
+      if (users.length === 0) {
+        return bot.sendMessage(chatId, 'No other users to remove.');
+      }
+
+      let resp = '🗑️ *Select a user to remove:*\n\n';
+      const buttons = [];
+      users.forEach((u, i) => {
+        resp += `*${i + 1}.* ${u.name} (${u.email}) — ${u.role}\n`;
+        buttons.push([{ text: `❌ ${u.name} (${u.email})`, callback_data: `del_user:${u._id}` }]);
+      });
+
+      bot.sendMessage(chatId, resp, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: buttons }
+      });
+    } catch (err) {
+      bot.sendMessage(chatId, '❌ Error fetching users.');
+    }
+  });
+
   // Handle Callback Queries (Inline Buttons)
   bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
@@ -457,6 +543,102 @@ function registerCommands() {
 
         bot.sendMessage(chatId, `Supply request approved! Stock for *${originalRequest.item}* (Category: ${originalRequest.category}) is now *${updatedStockQty}*.`, { parse_mode: 'Markdown' });
         bot.answerCallbackQuery(query.id, { text: 'Request completed successfully!' });
+        return;
+      }
+
+      // 5. Delete User Callback (Admin only)
+      if (data.startsWith('del_user:')) {
+        const userId = data.split(':')[1];
+        const adminUser = await getLoggedInUser(chatId);
+        if (!adminUser || adminUser.role !== 'super_admin') {
+          return bot.answerCallbackQuery(query.id, { text: 'Only super admins can delete users.', show_alert: true });
+        }
+
+        const targetUser = await User.findById(userId);
+        if (!targetUser) {
+          return bot.answerCallbackQuery(query.id, { text: 'User not found.', show_alert: true });
+        }
+
+        await User.findByIdAndDelete(userId);
+
+        bot.editMessageText(`${query.message.text}\n\n✅ *${targetUser.name}* has been deleted.`, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown'
+        });
+
+        bot.answerCallbackQuery(query.id, { text: `${targetUser.name} deleted successfully!` });
+        return;
+      }
+
+      // 6. Add User Role Selection
+      if (data.startsWith('adduser_role:')) {
+        const role = data.split(':')[1];
+        const session = sessions[chatId];
+        if (!session || session.type !== 'adduser') {
+          return bot.answerCallbackQuery(query.id, { text: 'Session expired. Use /adduser again.', show_alert: true });
+        }
+        session.data.role = role;
+        session.step = 'await_group';
+
+        const opts = {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: 'Santos', callback_data: 'adduser_group:Santos' },
+                { text: 'AV/IT', callback_data: 'adduser_group:AV/IT' },
+                { text: 'Sevaks', callback_data: 'adduser_group:Sevaks' }
+              ],
+              [{ text: 'No Group', callback_data: 'adduser_group:' }]
+            ]
+          }
+        };
+        bot.editMessageText(`Role: *${role}*\n\nSelect group:`, {
+          chat_id: chatId,
+          message_id: messageId,
+          parse_mode: 'Markdown',
+          ...opts
+        });
+        bot.answerCallbackQuery(query.id);
+        return;
+      }
+
+      // 7. Add User Group Selection (final step)
+      if (data.startsWith('adduser_group:')) {
+        const group = data.split(':')[1];
+        const session = sessions[chatId];
+        if (!session || session.type !== 'adduser') {
+          return bot.answerCallbackQuery(query.id, { text: 'Session expired. Use /adduser again.', show_alert: true });
+        }
+        session.data.group = group;
+
+        try {
+          const exists = await User.findOne({ email: session.data.email });
+          if (exists) {
+            delete sessions[chatId];
+            bot.editMessageText('❌ A user with that email already exists.', { chat_id: chatId, message_id: messageId });
+            return bot.answerCallbackQuery(query.id);
+          }
+
+          const newUser = await User.create({
+            name: session.data.name,
+            email: session.data.email,
+            password: session.data.password,
+            role: session.data.role,
+            group: session.data.group
+          });
+
+          delete sessions[chatId];
+          bot.editMessageText(
+            `✅ *User Created Successfully*\n\n*Name:* ${newUser.name}\n*Email:* ${newUser.email}\n*Role:* ${newUser.role}\n*Group:* ${newUser.group || 'None'}`,
+            { chat_id: chatId, message_id: messageId, parse_mode: 'Markdown' }
+          );
+          bot.answerCallbackQuery(query.id, { text: 'User created!' });
+        } catch (err) {
+          delete sessions[chatId];
+          bot.editMessageText('❌ Error creating user. Please try /adduser again.', { chat_id: chatId, message_id: messageId });
+          bot.answerCallbackQuery(query.id);
+        }
         return;
       }
     } catch (err) {
@@ -745,6 +927,42 @@ function registerCommands() {
           bot.sendMessage(chatId, 'Error submitting request details.');
         }
         delete sessions[chatId];
+        return;
+      }
+    }
+
+    // 4. Add User flow (Admin)
+    if (session.type === 'adduser') {
+      if (session.step === 'await_name') {
+        session.data.name = text.trim();
+        session.step = 'await_email';
+        bot.sendMessage(chatId, 'Enter email address:');
+        return;
+      }
+      if (session.step === 'await_email') {
+        session.data.email = text.trim().toLowerCase();
+        session.step = 'await_password';
+        bot.sendMessage(chatId, 'Enter password:');
+        return;
+      }
+      if (session.step === 'await_password') {
+        session.data.password = text.trim();
+        session.step = 'await_role';
+        const opts = {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: 'Member', callback_data: 'adduser_role:member' },
+                { text: 'Doctor', callback_data: 'adduser_role:doctor' }
+              ],
+              [
+                { text: 'Inventory Manager', callback_data: 'adduser_role:inventory_manager' },
+                { text: 'Super Admin', callback_data: 'adduser_role:super_admin' }
+              ]
+            ]
+          }
+        };
+        bot.sendMessage(chatId, 'Select role:', opts);
         return;
       }
     }

@@ -1,13 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import Login     from './pages/Login'
-import Health    from './pages/Health'
-import News      from './pages/News'
-import Inventory from './pages/Inventory'
-import Roads     from './pages/Roads'
-import Events    from './pages/Events'
-import Sidebar   from './components/Sidebar'
-import Topbar    from './components/Topbar'
+import Login      from './pages/Login'
+import Health     from './pages/Health'
+import News       from './pages/News'
+import Inventory  from './pages/Inventory'
+import Roads      from './pages/Roads'
+import Events     from './pages/Events'
+import AdminUsers from './pages/AdminUsers'
+import Sidebar    from './components/Sidebar'
+import Topbar     from './components/Topbar'
 
 function PrivateLayout({ children, title }) {
   const { token } = useAuth()
@@ -33,6 +34,7 @@ function AppRoutes() {
       <Route path="/inventory" element={<PrivateLayout title="Inventory Dashboard"><Inventory /></PrivateLayout>} />
       <Route path="/roads"    element={<PrivateLayout title="Roads"><Roads /></PrivateLayout>} />
       <Route path="/events"   element={<PrivateLayout title="Events"><Events /></PrivateLayout>} />
+      <Route path="/admin/users" element={<PrivateLayout title="User Management"><AdminUsers /></PrivateLayout>} />
       <Route path="*"         element={<Navigate to="/" />} />
     </Routes>
   )

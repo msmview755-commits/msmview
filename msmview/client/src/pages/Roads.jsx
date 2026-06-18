@@ -18,6 +18,30 @@ const CENTER = [21.1702, 72.8311] // Surat, Gujarat
 
 const TYPE_COLORS = { traffic: '#e53e3e', construction: '#d69e2e', accident: '#dd6b20', closure: '#c53030', other: '#3182ce' }
 
+const WMO_CODES = {
+  0: { label: 'Clear Sky', icon: '☀️' },
+  1: { label: 'Mainly Clear', icon: '🌤️' },
+  2: { label: 'Partly Cloudy', icon: '⛅' },
+  3: { label: 'Overcast', icon: '☁️' },
+  45: { label: 'Foggy', icon: '🌫️' },
+  48: { label: 'Rime Fog', icon: '🌫️' },
+  51: { label: 'Light Drizzle', icon: '🌦️' },
+  53: { label: 'Moderate Drizzle', icon: '🌦️' },
+  55: { label: 'Dense Drizzle', icon: '🌧️' },
+  61: { label: 'Slight Rain', icon: '🌧️' },
+  63: { label: 'Moderate Rain', icon: '🌧️' },
+  65: { label: 'Heavy Rain', icon: '🌧️' },
+  71: { label: 'Slight Snow', icon: '🌨️' },
+  73: { label: 'Moderate Snow', icon: '🌨️' },
+  75: { label: 'Heavy Snow', icon: '❄️' },
+  80: { label: 'Rain Showers', icon: '🌦️' },
+  81: { label: 'Moderate Showers', icon: '🌧️' },
+  82: { label: 'Violent Showers', icon: '⛈️' },
+  95: { label: 'Thunderstorm', icon: '⛈️' },
+  96: { label: 'Thunderstorm + Hail', icon: '⛈️' },
+  99: { label: 'Thunderstorm + Heavy Hail', icon: '⛈️' },
+}
+
 function PinDropper({ onDrop }) {
   useMapEvents({ click: e => onDrop(e.latlng) })
   return null
@@ -31,10 +55,93 @@ export default function Roads() {
   const [showForm,  setShowForm]  = useState(false)
   const [pickedLoc, setPickedLoc] = useState(null)
   const [form, setForm] = useState({ title:'', type:'traffic', address:'', description:'' })
+  
+  // Weather states
+  const [center, setCenter] = useState(CENTER)
+  const [weather, setWeather] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(true)
+  const [weatherError, setWeatherError] = useState(false)
+
+  const fetchWeatherAndLocation = async (lat, lng) => {
+    setWeatherLoading(true)
+    setWeatherError(false)
+    try {
+      // 1. Fetch from Open-Meteo
+      const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m&timezone=auto`
+      const weatherRes = await axios.get(weatherUrl)
+      const current = weatherRes.data.current
+
+      // 2. Fetch City/Area from Nominatim (Reverse Geocoding)
+      let city = ''
+      try {
+        const geoRes = await axios.get(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+          { headers: { 'User-Agent': 'msmview-dashboard/1.0' } }
+        )
+        const addr = geoRes.data.address
+        city = addr.suburb || addr.neighbourhood || addr.city || addr.town || addr.village || addr.county || 'Nearby Area'
+        if (addr.state) {
+          city += `, ${addr.state}`
+        }
+      } catch (e) {
+        console.warn("Reverse geocoding failed, using fallback name.", e)
+        const isNearSurat = Math.abs(lat - CENTER[0]) < 0.2 && Math.abs(lng - CENTER[1]) < 0.2
+        city = isNearSurat ? 'Surat, Gujarat' : 'Nearby Area'
+      }
+
+      const code = current.weather_code
+      const condition = WMO_CODES[code] || { label: 'Unknown', icon: '🌡️' }
+
+      setWeather({
+        temp: current.temperature_2m,
+        feelsLike: current.apparent_temperature,
+        humidity: current.relative_humidity_2m,
+        windSpeed: current.wind_speed_10m,
+        condition,
+        city,
+        lat,
+        lng
+      })
+    } catch (err) {
+      console.error("Failed to fetch weather", err)
+      setWeatherError(true)
+    } finally {
+      setWeatherLoading(false)
+    }
+  }
 
   useEffect(() => {
+    // Fetch incidents
     axios.get(`${API}/roads`).then(r => setIncidents(r.data)).catch(() => {})
+
+    // Detect Geolocation
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude
+          const lng = position.coords.longitude
+          setCenter([lat, lng])
+          fetchWeatherAndLocation(lat, lng)
+        },
+        (error) => {
+          console.warn("Geolocation access denied or failed. Falling back to Surat.", error)
+          fetchWeatherAndLocation(CENTER[0], CENTER[1])
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      )
+    } else {
+      fetchWeatherAndLocation(CENTER[0], CENTER[1])
+    }
   }, [])
+
+  // Auto-refresh weather every 10 minutes
+  useEffect(() => {
+    if (weatherLoading || !weather) return
+    const interval = setInterval(() => {
+      fetchWeatherAndLocation(center[0], center[1])
+    }, 600000)
+    return () => clearInterval(interval)
+  }, [center])
 
   const handleDrop = (latlng) => {
     if (!dropping) return
@@ -57,6 +164,45 @@ export default function Roads() {
 
   return (
     <div>
+      {/* Real-time Weather Widget */}
+      <div className="weather-section mb-3">
+        {weatherLoading ? (
+          <div className="text-sm text-muted">Fetching local weather data...</div>
+        ) : weatherError ? (
+          <div className="text-sm text-muted">⚠️ Weather data currently unavailable.</div>
+        ) : (
+          <div className="weather-container">
+            <div className="weather-main">
+              <span className="weather-emoji">{weather.condition.icon}</span>
+              <div>
+                <h3 className="weather-temp">{Math.round(weather.temp)}°C</h3>
+                <p className="weather-desc">{weather.condition.label}</p>
+              </div>
+            </div>
+            <div className="weather-location-info">
+              <div className="weather-city">{weather.city || 'Nearby Area'}</div>
+              <div className="weather-coords">
+                Lat: {weather.lat.toFixed(4)} · Lng: {weather.lng.toFixed(4)}
+              </div>
+            </div>
+            <div className="weather-details">
+              <div className="weather-detail-item">
+                <span className="label">Feels Like</span>
+                <span className="val">{Math.round(weather.feelsLike)}°C</span>
+              </div>
+              <div className="weather-detail-item">
+                <span className="label">Humidity</span>
+                <span className="val">{weather.humidity}%</span>
+              </div>
+              <div className="weather-detail-item">
+                <span className="label">Wind</span>
+                <span className="val">{weather.windSpeed} km/h</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex-between mb-2">
         <div>
           <p className="text-sm text-muted">Live road situation — {incidents.length} active incidents</p>
@@ -91,7 +237,7 @@ export default function Roads() {
       </div>
 
       <div className="map-wrapper" style={{ height:480 }}>
-        <MapContainer center={CENTER} zoom={13} style={{ height:'100%', width:'100%' }}>
+        <MapContainer key={`${center[0]}-${center[1]}`} center={center} zoom={13} style={{ height:'100%', width:'100%' }}>
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution='&copy; <a href="https://openstreetmap.org">OpenStreetMap</a>'
