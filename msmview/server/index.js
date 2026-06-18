@@ -84,21 +84,23 @@ app.get('/api/diagnostics', async (req, res) => {
 
 app.get('/', (req, res) => res.json({ status: 'MSM View API running' }));
 
+// Start the Express server immediately
+const server = app.listen(process.env.PORT || 5000, () => {
+  console.log(`Server on port ${process.env.PORT || 5000}`);
+  
+  // Set up Telegram bot webhook immediately (replaces polling)
+  const { setupWebhook } = require('./bot/telegram');
+  setupWebhook(app);
+});
+
+// Connect to MongoDB in the background
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
-    // Trigger Render auto-redeploy. Connected to MongoDB.
-    console.log('MongoDB connected');
-
-    // Set up Telegram bot webhook (replaces polling)
-    const { setupWebhook } = require('./bot/telegram');
-    setupWebhook(app);
-
-    app.listen(process.env.PORT || 5000, () =>
-      console.log(`Server on port ${process.env.PORT || 5000}`)
-    );
+    console.log('MongoDB connected successfully');
   })
   .catch(err => {
-    console.error('MongoDB error:', err.message);
+    console.error('MongoDB connection error:', err.message);
     process.exit(1);
   });
+
 
